@@ -378,11 +378,15 @@
 
 <div class="notes-panel" id="notesPanel" role="dialog" aria-label="Notes">
   <div class="notes-head">
-    <div><h4>Notes</h4><div class="sub">Specific &amp; general things to add</div><div class="drag-tip">Drag any numbered item here to attach it →</div></div>
+    <div><h4>Notes</h4><div class="sub">Shared with both partners — synced live</div><div class="drag-tip">Drag any numbered item here to attach it →</div></div>
     <div class="acts">
       <button class="iconbtn" id="addNoteBtn" aria-label="Add a note" title="Add a note">+</button>
       <button class="iconbtn" id="closeNotesBtn" aria-label="Close notes" title="Close">×</button>
     </div>
+  </div>
+  <div id="whoBar" style="padding:8px 16px;border-bottom:1px solid var(--line);background:var(--paper);font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:8px">
+    <span id="whoLabel">Posting as: —</span>
+    <button id="whoSwitch" type="button" style="background:none;border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-size:11px;color:var(--soft);cursor:pointer;font-family:inherit">Switch</button>
   </div>
 
   <div class="note-form" id="noteForm">
@@ -969,7 +973,17 @@ go(0);
 <script>
 /* ============================= NOTES WIDGET ============================= */
 (function(){
-  const KEY = 'hl_notes_v1';
+  const CACHE_KEY = 'hl_notes_cache_v2';
+  const WHO_KEY = 'hl_notes_who_v1';
+  const SUPABASE_URL = 'https://uiwgmkagvjfiiuwbjvsy.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVpd2dta2FndmpmaWl1d2JqdnN5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwMDQ5NzAsImV4cCI6MjEwMDU4MDk3MH0.yDxaoRT4YMelctHOXmZB_MP7L6oq_m8UbBlEEXRj-dw';
+  const REST = SUPABASE_URL + '/rest/v1/deck_notes';
+  const sbHeaders = {
+    'apikey': SUPABASE_ANON_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+    'Content-Type': 'application/json'
+  };
+
   const fab = document.getElementById('notesFab');
   const panel = document.getElementById('notesPanel');
   const cntEl = document.getElementById('notesCnt');
@@ -981,21 +995,77 @@ go(0);
   const subjectInput = document.getElementById('noteSubject');
   const textInput = document.getElementById('noteText');
   const micBtn = document.getElementById('micBtn');
+  const whoLabel = document.getElementById('whoLabel');
+  const whoSwitch = document.getElementById('whoSwitch');
 
   const linkedChip = document.getElementById('linkedChip');
   let linkedItemText = null;
   let storageOK = true;
-  let memNotes = [];
+  let syncOK = true;
 
-  function load(){
-    try { const v = JSON.parse(localStorage.getItem(KEY)) || []; return v; }
-    catch(e){ storageOK = false; return memNotes; }
+  /* who is posting — David or Utba, remembered per browser */
+  function getWho(){ try { return localStorage.getItem(WHO_KEY); } catch(e){ return null; } }
+  function setWho(v){ try { localStorage.setItem(WHO_KEY, v); } catch(e){} renderWho(); }
+  function renderWho(){
+    const who = getWho();
+    whoLabel.textContent = 'Posting as: ' + (who ? (who === 'david' ? 'David' : 'Utba') : '—');
   }
-  function save(list){
-    try { localStorage.setItem(KEY, JSON.stringify(list)); }
-    catch(e){ storageOK = false; memNotes = list; }
+  function pickWho(){
+    const v = prompt("Who's posting — type 'david' or 'utba':", getWho() || '');
+    if(v && (v.trim().toLowerCase() === 'david' || v.trim().toLowerCase() === 'utba')){
+      setWho(v.trim().toLowerCase());
+    }
   }
-  let notes = load();
+  whoSwitch.addEventListener('click', pickWho);
+  renderWho();
+
+  /* local cache = instant paint + offline fallback; Supabase = source of truth, synced live */
+  function loadCache(){
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; }
+    catch(e){ storageOK = false; return []; }
+  }
+  function saveCache(list){
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify(list)); }
+    catch(e){ storageOK = false; }
+  }
+  let notes = loadCache();
+
+  function mapRow(r){
+    return { id: r.id, subject: r.subject, text: r.body, linkedTo: r.linked_ref, author: r.author, ts: new Date(r.created_at).getTime() };
+  }
+
+  async function fetchNotes(){
+    try {
+      const res = await fetch(REST + '?select=*&order=created_at.asc', { headers: sbHeaders });
+      if(!res.ok) throw new Error('fetch failed');
+      const rows = await res.json();
+      notes = rows.map(mapRow);
+      syncOK = true;
+      saveCache(notes);
+      render();
+    } catch(e){
+      syncOK = false;
+      render();
+    }
+  }
+
+  async function insertNote(payload){
+    const res = await fetch(REST, {
+      method: 'POST',
+      headers: Object.assign({}, sbHeaders, { Prefer: 'return=representation' }),
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok) throw new Error('insert failed');
+    return res.json();
+  }
+
+  async function deleteNote(id){
+    const res = await fetch(REST + '?id=eq.' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: sbHeaders
+    });
+    if(!res.ok) throw new Error('delete failed');
+  }
 
   function fmtTime(ts){
     const d = new Date(ts);
@@ -1006,23 +1076,24 @@ go(0);
   function render(justSavedId){
     cntEl.textContent = notes.length;
     cntEl.classList.toggle('zero', notes.length===0);
-    const warn = !storageOK ? '<div class="notes-warn">Browser storage is blocked — notes will only last this session.</div>' : '';
+    const warn = !syncOK ? '<div class="notes-warn">Can\'t reach the shared note store right now — showing last synced copy. Notes you add will retry.</div>' : (!storageOK ? '<div class="notes-warn">Browser storage is blocked — notes will only last this session.</div>' : '');
     if(notes.length===0){
       bodyEl.innerHTML = warn + '<div class="notes-empty">No notes yet. Tap <b>+</b> to jot down something<br>specific or general — or drag a numbered item in.</div>';
       return;
     }
     bodyEl.innerHTML = warn + notes.slice().reverse().map(n => `
       <div class="note-item" data-id="${n.id}">
-        <span class="subj">${escapeHtml(n.subject || 'General')}</span>
+        <span class="subj">${escapeHtml(n.subject || 'General')}${n.author ? ` · <span style="font-weight:500;color:var(--muted)">${n.author === 'david' ? 'David' : n.author === 'utba' ? 'Utba' : escapeHtml(n.author)}</span>` : ''}</span>
         <div class="txt">${escapeHtml(n.text)}</div>
         ${n.linkedTo ? `<div class="linked-ref">🔗 ${escapeHtml(n.linkedTo)}</div>` : ''}
         <div class="meta"><span class="ts">${fmtTime(n.ts)}</span><button class="del" data-del="${n.id}">Delete</button></div>
       </div>`).join('');
     bodyEl.querySelectorAll('[data-del]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         const id = btn.getAttribute('data-del');
         notes = notes.filter(n => String(n.id) !== id);
-        save(notes); render();
+        saveCache(notes); render();
+        try { await deleteNote(id); } catch(e){ fetchNotes(); }
       });
     });
     if(justSavedId){
@@ -1065,10 +1136,11 @@ go(0);
         <div class="meta"><span class="ts">${fmtTime(n.ts)}</span><button class="del" data-rdel="${n.id}">Delete</button></div>
       </div>`).join('');
     reviewBody.querySelectorAll('[data-rdel]').forEach(btn=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         const id = btn.getAttribute('data-rdel');
         notes = notes.filter(n => String(n.id) !== id);
-        save(notes); render();
+        saveCache(notes); render();
+        try { await deleteNote(id); } catch(e){ fetchNotes(); }
       });
     });
   }
@@ -1114,7 +1186,10 @@ go(0);
     fab.setAttribute('aria-expanded','false');
     form.classList.remove('open');
   }
-  fab.addEventListener('click', ()=> panel.classList.contains('open') ? closePanel() : openPanel());
+  fab.addEventListener('click', ()=>{
+    if(panel.classList.contains('open')){ closePanel(); }
+    else { openPanel(); fetchNotes(); }
+  });
   closeBtn.addEventListener('click', closePanel);
   document.addEventListener('keydown', e=>{ if(e.key==='Escape') closePanel(); });
   document.addEventListener('click', e=>{
@@ -1128,16 +1203,25 @@ go(0);
     if(form.classList.contains('open')) subjectInput.focus();
   });
 
-  function addNote(){
+  async function addNote(){
     const text = textInput.value.trim();
     if(!text) { textInput.focus(); return; }
-    const id = Date.now();
-    notes.push({ id, subject: subjectInput.value.trim() || 'General', text, linkedTo: linkedItemText, ts: id });
-    save(notes);
+    if(!getWho()){ pickWho(); if(!getWho()) return; }
+    const tempId = 'temp-' + Date.now();
+    const subject = subjectInput.value.trim() || 'General';
+    const linked = linkedItemText;
+    notes.push({ id: tempId, subject, text, linkedTo: linked, author: getWho(), ts: Date.now() });
+    saveCache(notes);
     subjectInput.value = ''; textInput.value = ''; textInput.style.height = '';
     linkedItemText = null; renderChip();
     form.classList.remove('open'); addBtn.classList.remove('active');
-    render(id);
+    render(tempId);
+    try {
+      await insertNote({ author: getWho(), subject, body: text, linked_ref: linked });
+      await fetchNotes();
+    } catch(e){
+      syncOK = false; render();
+    }
   }
   saveBtn.addEventListener('click', addNote);
   textInput.addEventListener('keydown', e=>{
@@ -1198,6 +1282,8 @@ go(0);
 
   renderChip();
   render();
+  fetchNotes();
+  setInterval(()=>{ if(panel.classList.contains('open')) fetchNotes(); }, 8000);
 })();
 </script>
 </body>
