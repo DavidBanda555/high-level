@@ -455,6 +455,87 @@ const SHEETS = [
     odd ones").</div>
 `},
 
+{ id:'utba', label:"Utba's To-Do", html:`
+  <span class="kicker">For Utba <span class="tag t-u" style="margin-left:8px">Start here</span></span>
+  <h1>Your to-do list.</h1>
+  <p class="lead">Two real tasks — validation, not construction. The code exists and runs; the
+    question is whether the accounting and sourcing judgment inside it is right. Nothing below needs
+    you to write Python.</p>
+
+  <h2><span class="ix">1</span>Get in</h2>
+  <div class="box">
+    <p style="margin-bottom:8px"><b>Repo:</b> <a href="https://github.com/highconsultings/engine" target="_blank" rel="noopener" style="color:var(--accent-ink);font-weight:600">github.com/highconsultings/engine</a> — you already have write access.</p>
+    <p>Clone it, open in Claude Code (reads the repo's own <code>CLAUDE.md</code> automatically), then
+    open <code>docs/00-start-here.md</code> — that's the entry point, it links everything else below.</p>
+  </div>
+
+  <h2><span class="ix">2</span>Task 1 — validate the accounting logic</h2>
+  <div class="box">
+    <p><b>File:</b> <code>finance_engine/test_finance_engine.py</code> — written as readable cases,
+      meant to <b>be the specification</b>. If a case asserts the wrong thing, the code is wrong —
+      say so and it gets changed. Run <code>python -m pytest -q</code> (39 tests, no API key needed,
+      instant) to see it all pass today.</p>
+    <p style="margin-top:10px"><b>The highest-value judgment calls to check</b> — each is its own
+      GitHub issue, close it with your answer:</p>
+    <ul class="plain" style="margin-top:8px">
+      <li>Aging measured from due date, not invoice date — <a href="https://github.com/highconsultings/engine/issues/4" target="_blank" rel="noopener">#4</a></li>
+      <li>3+ invoices before calling it a supplier pattern — <a href="https://github.com/highconsultings/engine/issues/5" target="_blank" rel="noopener">#5</a></li>
+      <li>Irregular suppliers never auto-accrued — <a href="https://github.com/highconsultings/engine/issues/6" target="_blank" rel="noopener">#6</a></li>
+      <li>Budget variance materiality: £250 absolute AND 25% relative — <a href="https://github.com/highconsultings/engine/issues/7" target="_blank" rel="noopener">#7</a></li>
+      <li>Customer concentration flagged at 40% — <a href="https://github.com/highconsultings/engine/issues/8" target="_blank" rel="noopener">#8</a></li>
+      <li>Aging bucket presentation — <a href="https://github.com/highconsultings/engine/issues/9" target="_blank" rel="noopener">#9</a></li>
+      <li>VAT / multi-currency / prepayments / credit notes — deliberately left out, your scope call — <a href="https://github.com/highconsultings/engine/issues/10" target="_blank" rel="noopener">#10</a></li>
+    </ul>
+  </div>
+
+  <h2><span class="ix">3</span>Task 2 — tune who we target</h2>
+  <div class="box">
+    <p><b>File:</b> <code>sourcing/config.py</code> — the single biggest lever on sourcing quality.
+      ICP is currently set to <b>messy-month-end SMEs</b> (wholesale, retail, hospitality,
+      construction, manufacturing, business services) — your call to confirm or change:
+      <a href="https://github.com/highconsultings/engine/issues/2" target="_blank" rel="noopener">#2 — the ICP itself</a>,
+      <a href="https://github.com/highconsultings/engine/issues/3" target="_blank" rel="noopener">#3 — the size sweet spot</a>.</p>
+    <p style="margin-top:10px"><code>python -m sourcing.run --dry-run</code> is the live-tuning
+      command, but it needs a Companies House API key that isn't set up yet — that's David's task,
+      not yours. Until then, tune by reasoning against the 6 companies already scored (next section)
+      or run <code>python -m pytest sourcing/test_scoring.py -v</code> — fully offline, shows exactly
+      how a config change would move a score.</p>
+  </div>
+
+  <h2><span class="ix">4</span>See who's actually been sourced</h2>
+  <div class="box">
+    <p>6 companies have passed scoring so far — ranked, with hypotheses and what's known (and not
+      known) about reaching them. Full list: <code>docs/projects/leads.md</code> in the repo.</p>
+    <p style="margin-top:10px"><b>Nobody's been contacted yet.</b> A compliance step (filtering to
+      Ltd/PLC, a documented lawful-basis assessment) has to clear first — David's task. Outreach
+      itself is always a joint decision, every time, not a one-off approval.</p>
+  </div>
+
+  <div class="define"><b>Where to write what you find:</b> close the relevant GitHub issue with your
+    answer, or write into <code>docs/resources/utba-review-notes.md</code> and tell David — either
+    works.</div>
+
+  <h2><span class="ix">5</span>Once a lead is qualified — what's yours</h2>
+  <p class="lead">This is the work once a company passes the checklist and becomes a real pursuit —
+    the part that's actually you, every time.</p>
+  <div class="grid g2">
+    <div class="box"><h3>1 · Run the discovery call</h3><p>Your half is the finance/ops questions —
+      same call as David's systems/workflow half, run together.</p></div>
+    <div class="box"><h3>2 · Write the diagnosis brief</h3><p>The real problem, in the client's own
+      words, backed by the numbers. Domain truth — your call on what's actually real.</p></div>
+    <div class="box"><h3>3 · Validate the economics</h3><p>Does the build David scopes actually make
+      commercial sense for this client — worth what it costs them.</p></div>
+    <div class="box"><h3>4 · Set pricing together</h3><p>Your input is value + affordability; the
+      final number is a joint call.</p></div>
+    <div class="box"><h3>5 · Finance-lens QA</h3><p>Before anything reaches the client — is it
+      numerically and practically correct, usable by a real finance team.</p></div>
+    <div class="box"><h3>6 · Own the client relationship</h3><p>Jointly, ongoing — not a handoff back
+      to David after the call.</p></div>
+    <div class="box"><h3>7 · After delivery</h3><p>Flag what pain recurred; help turn it into a
+      reusable template for the next client.</p></div>
+  </div>
+`},
+
 { id:'foundations', label:'Foundations', html:`
   <span class="kicker">Positioning &amp; principles</span>
   <h1>What kind of firm this is — on purpose.</h1>
